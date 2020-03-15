@@ -1,8 +1,11 @@
 import time
 from selenium import webdriver
-driver = webdriver.Chrome()
-driver.get('https://papago.naver.com/')
+import click
 
+def start_driver():
+    global driver
+    driver = webdriver.Chrome()
+    driver.get('https://papago.naver.com/')
 
 def papa_list(string, delim = "\n\n"):
     """
@@ -26,6 +29,7 @@ def papa_translate(papa_list, sleep_time=5):
     """
     clean_translate = list()
     error_list = list()
+    time.sleep(10)
     inputElement = driver.find_element_by_id("sourceEditArea")
     print("Start translating")
     process = 0
@@ -56,20 +60,27 @@ def papa_save(papa_list, encoding = 'utf-8', delim='\n\n', file_name = 'translat
     file = open(file_name, 'w', encoding = 'utf-8')
     file.write(t)
     print("Done. The file name is:", file_name)
+    
 
 
+@click.command()
 @click.option('--delim', default="\n\n", type=str)
 @click.option('--sleep_time', default=5, type=int)
-@click.option('--input_dir', type=str)
+@click.option('--input_dir', prompt='text file directory')
 @click.option('--output_dir', default='translatedFile.txt', type=str)
 
 def main(input_dir, delim, sleep_time, output_dir):
 
-    with open(input_dir, 'r') as f:
+    start_driver()
+
+    with open(input_dir, 'r', encoding='utf-8') as f:
         text = f.read()
+
     delimmed_text = papa_list(text, delim=delim)
     translated_text = papa_translate(delimmed_text, sleep_time=sleep_time)
     papa_save(translated_text, file_name=output_dir)
+
+    driver.close()
 
 if __name__ == "__main__":
     main()
