@@ -1,31 +1,88 @@
 import time
 from selenium import webdriver
 import click
+from tika import parser
+import tika
+
+def get_article(file_name):
+    """
+    Parse text from PDF
+
+    Args:
+        file_name (str): File name, except the extension '.pdf'
+    
+    Returns:
+        article (str): Long string, with all the text from pdf file
+
+    """
+    article = parser.from_file(file_name+'.pdf')
+    article = article['content']
+    return article
 
 def start_driver():
+    """
+    Start chrome webdriver, and go to papago website.
+    """
     global driver
     driver = webdriver.Chrome()
     driver.get('https://papago.naver.com/')
 
-def papa_list(string, delim = "\n\n"):
+def end_driver():
     """
-    Input is a string. The whole string that I want to translate.
-    Specify the delimiter to get a list of sentences.
-    This output could be an input to the `papa_translate` function.
+    Close the chrome driver
     """
-    ls = string.split(delim)
-    ls = [_.replace('\n', '') for _ in ls]
+    driver.close()
+
+def article2lists(article, delim='.', max_length=2000):
+    """
+    Split the article into list, which will be the input for translation.
+
+    Args:
+        article (str): Input is a string. The whole string that needs to be translated.
+        delim (str): Delimeter for splitting the article into lists.
+        max_length (int): Max length for each input string
+
+    Raises:
+        assertionError: If any of the element of the list exceeds length 5000.
+                        This is because papago only accepts upto 5000 characters per input.
+
+    Returns:
+        papa_list (list): Article, splitted into list
     
-    if max([len(_) for _ in ls]) > 5000:
-        print("WARNING: Length of one string is too long!!!!!")
-    else:
-        print("Good to go")
-    return ls
+    """
+
+    papa_list = dict()
+    key = 'key'
+    papa_list[key] = ''
+    splitted_article = article.split('.')
+    for i in range(len(splitted_article)):
+        if len(papa_list[key]) < max_length:
+            outstring = papa_list[key] + splitted_article[i] + '.'
+            papa_list[key] = outstring
+        else:
+            key = 'key'+str(i)
+            papa_list[key] = splitted_article[i]
+    papa_list = list(papa_list.values())
+
+    if max([len(_) for _ in papa_list]) > 5000:
+        assert False, ("One of the elements in the papa_list is too long.") 
+
+    print("Good to go")
+    return papa_list
+
 
 def papa_translate(papa_list, sleep_time=5):
     """
     The input is a list of sentences.
     Output is the translated version of those sentences.
+
+    Arguments:
+        papa_list (list): Article, splitted into list.
+        sleep_time (numeric): Time sleeping between translations.
+
+    Returns:
+        clean_translate (list): Translated version of article.
+
     """
     clean_translate = list()
     error_list = list()
@@ -49,38 +106,49 @@ def papa_translate(papa_list, sleep_time=5):
     print('Errors occurred:', error_list)
     return clean_translate
 
-def papa_save(papa_list, encoding = 'utf-8', delim='\n\n', file_name = 'translatedFile.txt'):
+def papa_save(clean_translate, encoding = 'utf-8', delim='\n\n', file_name = 'translatedFile.txt'):
     """
     Saves the translated list.
-    Doesn't return anything.
+    
+    Arguments:
+        clean_translate (list): Translated list
+        encoding (str): Encoding type
+        delim (str): Delimiter
+        file_name (str): File name I want to save as
+    
+    Returns:
+        None
+
     """
     t = ''
-    for i in papa_list:
+    for i in clean_translate:
         t += i+ delim
     file = open(file_name, 'w', encoding = 'utf-8')
     file.write(t)
     print("Done. The file name is:", file_name)
     
+def papa_fix_saved(file_name):
+    """
+    After initial saving, the text will contain some English version of Korean pronounciation.
+    Eliminate those English.
 
+    Args:
+        file_name (str): File name to work with
 
-@click.command()
-@click.option('--delim', default="\n\n", type=str)
-@click.option('--sleep_time', default=5, type=int)
-@click.option('--input_dir', prompt='text file directory')
-@click.option('--output_dir', default='translatedFile.txt', type=str)
+    Returns:
+        None
 
-def main(input_dir, delim, sleep_time, output_dir):
+    """
+    
+    with open(file_name, 'r', encoding='utf-8') as f:
+        content = f.read()
+    content = content.split('\n')
+    content = [_ for _ in content if _!='']
 
-    start_driver()
+    end = ''
+    for i in range(len(content)):
+        if i%2==0:
+            end = end + '\n\n' + content[i]
 
-    with open(input_dir, 'r', encoding='utf-8') as f:
-        text = f.read()
-
-    delimmed_text = papa_list(text, delim=delim)
-    translated_text = papa_translate(delimmed_text, sleep_time=sleep_time)
-    papa_save(translated_text, file_name=output_dir)
-
-    driver.close()
-
-if __name__ == "__main__":
-    main()
+    with open(file_name, 'w', encoding = 'utf-8') as file:
+        file.write(end)
